@@ -1,0 +1,81 @@
+version: '3'
+
+services:
+  webserver:
+    image: nginx:mainline-alpine
+    container_name: webserver
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - web-root:/var/www/html
+      - ./nginx:/etc/nginx/conf.d
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/lib/letsencrypt
+      - dhparam:/etc/ssl/certs
+    depends_on:
+      - kanboard
+    networks:
+      - app-network
+  # This is optional
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/lib/letsencrypt
+      - web-root:/var/www/html
+    depends_on:
+      - webserver
+    command: certonly --webroot --webroot-path=/var/www/html --email <add email>--agree-tos --no-eff-email --force-renewal -d <add website name>
+  kanboard:
+    image: kanboard/kanboard:latest
+    container_name: kanboard
+    volumes:
+      - kanboard_data:/var/www/app/data
+      - kanboard_plugins:/var/www/app/plugins
+      - kanboard_ssl:/etc/nginx/ssl
+    environment:
+      DATABASE_URL: mysql://kanboard:<replace with MYSQL_PASSWORD>@db/kanboard
+    restart: unless-stopped
+    networks:
+      - app-network
+  db:
+    image: mariadb:latest
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: <make a good password>
+      MYSQL_DATABASE: kanboard
+      MYSQL_USER: kanboard
+      MYSQL_PASSWORD: <make another good password>
+    volumes:
+      - db:/var/lib/mysql
+    networks:
+      - app-network
+
+volumes:
+  kanboard_data:
+  kanboard_plugins:
+  kanboard_ssl:
+  db:
+  certbot-etc:
+  certbot-var:
+  # Set up to connect to local folder where you want to serve the server
+  web-root:
+    driver: local
+    driver_opts:
+      type: none
+      device: <add real create path with HTML files>
+      o: bind
+  # Same here. Without this, that data in here would be replace when everything restarts
+  dhparam:
+    driver: local
+    driver_opts:
+      type: none
+      device: <add real file path to Diffi-helman file for SSL>
+      o: bind
+
+networks:
+  app-network:
+    driver: bridge
